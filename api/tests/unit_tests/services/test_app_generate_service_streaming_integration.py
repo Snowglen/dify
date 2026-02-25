@@ -89,6 +89,7 @@ class _FakeStreams:
 @pytest.fixture
 def _patch_get_channel_streams(monkeypatch):
     from libs.broadcast_channel.redis.streams_channel import StreamsBroadcastChannel
+
     fake = _FakeStreams()
     chan = StreamsBroadcastChannel(fake, retention_seconds=60)
 
@@ -100,12 +101,14 @@ def _patch_get_channel_streams(monkeypatch):
     monkeypatch.setattr("core.app.apps.message_generator.get_pubsub_broadcast_channel", lambda: chan)
     # Ensure AppGenerateService sees streams mode
     import services.app_generate_service as ags
+
     monkeypatch.setattr(ags.dify_config, "PUBSUB_REDIS_CHANNEL_TYPE", "streams", raising=False)
 
 
 @pytest.fixture
 def _patch_get_channel_pubsub(monkeypatch):
     from libs.broadcast_channel.redis.channel import BroadcastChannel as RedisBroadcastChannel
+
     store: dict[str, deque[bytes]] = defaultdict(deque)
     client = _FakeRedisClient(store)
     chan = RedisBroadcastChannel(client)
@@ -118,6 +121,7 @@ def _patch_get_channel_pubsub(monkeypatch):
     monkeypatch.setattr("core.app.apps.message_generator.get_pubsub_broadcast_channel", lambda: chan)
     # Ensure AppGenerateService sees pubsub mode
     import services.app_generate_service as ags
+
     monkeypatch.setattr(ags.dify_config, "PUBSUB_REDIS_CHANNEL_TYPE", "pubsub", raising=False)
 
 
