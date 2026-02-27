@@ -10,7 +10,7 @@ dependencies = [
     "beautifulsoup4==4.12.2",
     "boto3==1.35.99",
     "bs4~=0.0.1",
-    "cachetools~=5.3.0",
+    "cachetools~=7.0.1",
     "celery~=5.5.2",
     "charset-normalizer>=3.4.4",
     "flask~=3.1.2",
