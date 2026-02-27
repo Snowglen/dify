@@ -22,7 +22,7 @@ from core.workflow.node_events import ModelInvokeCompletedEvent, NodeRunResult
 from core.workflow.nodes.base.entities import VariableSelector
 from core.workflow.nodes.base.node import Node
 from core.workflow.nodes.base.variable_template_parser import VariableTemplateParser
-from core.workflow.nodes.llm import LLMNodeChatModelMessage, LLMNodeCompletionModelPromptTemplate, llm_utils
+from core.workflow.nodes.llm import LLMNode, LLMNodeChatModelMessage, LLMNodeCompletionModelPromptTemplate, llm_utils
 from core.workflow.nodes.llm.file_saver import FileSaverImpl, LLMFileSaver
 from core.workflow.nodes.llm.protocols import CredentialsProvider, ModelFactory
 from libs.json_in_md_parser import parse_and_check_json_markdown
@@ -107,8 +107,6 @@ class QuestionClassifierNode(Node[QuestionClassifierNodeData]):
         )
 
         # resolve variable references in completion_params
-        from core.workflow.nodes.llm.node import LLMNode
-
         resolved_completion_params = LLMNode.resolve_model_parameters(
             completion_params=node_data.model.completion_params,
             variable_pool=variable_pool,
