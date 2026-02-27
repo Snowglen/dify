@@ -158,8 +158,7 @@ class QuestionClassifierNode(Node[QuestionClassifierNodeData]):
             sys_query="",
             memory=memory,
             model_instance=model_instance,
-            
-          =model_schema,
+            model_schema=model_schema,
             model_parameters=node_data.model.completion_params,
             stop=model_config.stop,
             sys_files=files,
