@@ -205,7 +205,7 @@ class LLMNode(Node[LLMNodeData]):
             )
 
             # resolve variable references in completion_params
-            resolved_completion_params = LLMNode._resolve_model_parameters(
+            resolved_completion_params = LLMNode.resolve_model_parameters(
                 completion_params=self.node_data.model.completion_params,
                 variable_pool=variable_pool,
             )
@@ -764,7 +764,7 @@ class LLMNode(Node[LLMNodeData]):
         return None
 
     @staticmethod
-    def _resolve_model_parameters(
+    def resolve_model_parameters(
         *,
         completion_params: dict[str, Any],
         variable_pool: VariablePool,
@@ -1098,7 +1098,7 @@ class LLMNode(Node[LLMNodeData]):
 
         # Extract variable references from completion_params
         completion_params = typed_node_data.model.completion_params or {}
-        for param_key, param_value in completion_params.items():
+        for _, param_value in completion_params.items():
             if isinstance(param_value, str):
                 parser = VariableTemplateParser(template=param_value)
                 param_variable_selectors = parser.extract_variable_selectors()

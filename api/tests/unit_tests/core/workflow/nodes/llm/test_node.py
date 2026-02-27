@@ -728,10 +728,10 @@ class TestReasoningFormat:
 
 
 class TestResolveModelParameters:
-    """Test cases for _resolve_model_parameters method."""
+    """Test cases for resolve_model_parameters method."""
 
     def test_resolve_model_parameters_with_simple_variable(self):
-        """Test _resolve_model_parameters with a simple variable reference."""
+        """Test resolve_model_parameters with a simple variable reference."""
         from core.variables.segments import FloatSegment, IntegerSegment
 
         variable_pool = VariablePool(
@@ -747,7 +747,7 @@ class TestResolveModelParameters:
             "top_p": 0.9,
         }
 
-        result = LLMNode._resolve_model_parameters(
+        result = LLMNode.resolve_model_parameters(
             completion_params=completion_params,
             variable_pool=variable_pool,
         )
@@ -757,7 +757,7 @@ class TestResolveModelParameters:
         assert result["top_p"] == 0.9
 
     def test_resolve_model_parameters_with_mixed_content(self):
-        """Test _resolve_model_parameters with mixed content (variable + text)."""
+        """Test resolve_model_parameters with mixed content (variable + text)."""
         from core.variables.segments import StringSegment
 
         variable_pool = VariablePool(
@@ -771,7 +771,7 @@ class TestResolveModelParameters:
             "temperature": 0.5,
         }
 
-        result = LLMNode._resolve_model_parameters(
+        result = LLMNode.resolve_model_parameters(
             completion_params=completion_params,
             variable_pool=variable_pool,
         )
@@ -780,7 +780,7 @@ class TestResolveModelParameters:
         assert result["temperature"] == 0.5
 
     def test_resolve_model_parameters_with_no_variables(self):
-        """Test _resolve_model_parameters with no variable references."""
+        """Test resolve_model_parameters with no variable references."""
         variable_pool = VariablePool(
             system_variables=SystemVariable.default(),
             user_inputs={},
@@ -792,7 +792,7 @@ class TestResolveModelParameters:
             "top_p": 0.9,
         }
 
-        result = LLMNode._resolve_model_parameters(
+        result = LLMNode.resolve_model_parameters(
             completion_params=completion_params,
             variable_pool=variable_pool,
         )

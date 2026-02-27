@@ -354,7 +354,7 @@ class AgentNode(Node[AgentNodeData]):
                     # resolve variable references in completion_params
                     if "completion_params" in value and isinstance(value["completion_params"], dict):
                         from core.workflow.nodes.llm.node import LLMNode
-                        resolved_completion_params = LLMNode._resolve_model_parameters(
+                        resolved_completion_params = LLMNode.resolve_model_parameters(
                             completion_params=value["completion_params"],
                             variable_pool=variable_pool,
                         )
@@ -430,7 +430,7 @@ class AgentNode(Node[AgentNodeData]):
                         # Extract variable references from completion_params if present
                         if "completion_params" in input.value and isinstance(input.value["completion_params"], dict):
                             completion_params = input.value["completion_params"]
-                            for param_key, param_value in completion_params.items():
+                            for _, param_value in completion_params.items():
                                 if isinstance(param_value, str):
                                     parser = VariableTemplateParser(template=param_value)
                                     param_variable_selectors = parser.extract_variable_selectors()

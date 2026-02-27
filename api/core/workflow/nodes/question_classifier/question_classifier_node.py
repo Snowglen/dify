@@ -95,7 +95,7 @@ class QuestionClassifierNode(Node[QuestionClassifierNodeData]):
 
         # resolve variable references in completion_params
         from core.workflow.nodes.llm.node import LLMNode
-        resolved_completion_params = LLMNode._resolve_model_parameters(
+        resolved_completion_params = LLMNode.resolve_model_parameters(
             completion_params=node_data.model.completion_params,
             variable_pool=variable_pool,
         )
@@ -261,12 +261,12 @@ class QuestionClassifierNode(Node[QuestionClassifierNodeData]):
 
         # Extract variable references from completion_params
         completion_params = typed_node_data.model.completion_params or {}
-        for param_key, param_value in completion_params.items():
+        for _, param_value in completion_params.items():
             if isinstance(param_value, str):
                 parser = VariableTemplateParser(template=param_value)
                 param_variable_selectors = parser.extract_variable_selectors()
                 for selector in param_variable_selectors:
-                    variable_mapping[selector.variable] = selector.value_selector
+                    variable_mapping[selector.variable] = list(selector.value_selector)
 
         variable_mapping = {node_id + "." + key: value for key, value in variable_mapping.items()}
 
