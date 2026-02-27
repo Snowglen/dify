@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import CopyFeedback from '@/app/components/base/copy-feedback'
 import Tooltip from '@/app/components/base/tooltip'
 import { writeTextToClipboard } from '@/utils/clipboard'
+
 type IInputCopyProps = {
   value?: string
   className?: string
@@ -38,7 +39,7 @@ const InputCopy = ({
           <div
             className="r-0 absolute left-0 top-0 w-full cursor-pointer truncate pl-2 pr-2"
             onClick={() => {
-                writeTextToClipboard(value).then(() => {
+              writeTextToClipboard(value).then(() => {
                 setIsCopied(true)
               })
             }}
