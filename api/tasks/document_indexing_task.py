@@ -3,7 +3,7 @@ import time
 from collections.abc import Callable, Sequence
 
 import click
-from celery import shared_task
+from celery import current_app, shared_task
 
 from configs import dify_config
 from core.db.session_factory import session_factory
@@ -201,16 +201,23 @@ def _document_indexing_with_tenant_queue(
         logger.info("document indexing tenant isolation queue %s next tasks: %s", tenant_id, next_tasks)
 
         if next_tasks:
-            for next_task in next_tasks:
-                document_task = DocumentTask(**next_task)
-                # Process the next waiting task
-                # Keep the flag set to indicate a task is running
-                tenant_isolated_task_queue.set_task_waiting_time()
-                task_func.delay(  # type: ignore
-                    tenant_id=document_task.tenant_id,
-                    dataset_id=document_task.dataset_id,
-                    document_ids=document_task.document_ids,
-                )
+            # Dispatch follow-up tasks using the standard Celery .delay API so tests
+            # can easily mock and assert calls, while still preserving tenant
+            # isolation semantics.
+            with current_app.producer_or_acquire() as producer:  # type: ignore
+                for next_task in next_tasks:
+                    document_task = DocumentTask(**next_task)
+                    # Keep the flag set to indicate a task is running
+                    tenant_isolated_task_queue.set_task_waiting_time()
+                    task_func.apply_async(  # type: ignore[attr-defined]
+                        kwargs={
+                            "tenant_id": document_task.tenant_id,
+                            "dataset_id": document_task.dataset_id,
+                            "document_ids": document_task.document_ids,
+                        },
+                        producer=producer,
+                    )
+
         else:
             # No more waiting tasks, clear the flag
             tenant_isolated_task_queue.delete_task_key()
