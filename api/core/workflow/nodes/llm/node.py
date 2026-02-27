@@ -840,7 +840,6 @@ class LLMNode(Node[LLMNodeData]):
                 parsed_params[key] = value
         return parsed_params
 
-    @staticmethod
     def _fetch_model_config(
         self,
         *,
