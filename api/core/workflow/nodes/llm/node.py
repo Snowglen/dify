@@ -204,6 +204,14 @@ class LLMNode(Node[LLMNodeData]):
                 tenant_id=self.tenant_id,
             )
 
+            # resolve variable references in completion_params
+            resolved_completion_params = LLMNode._resolve_model_parameters(
+                completion_params=self.node_data.model.completion_params,
+                variable_pool=variable_pool,
+            )
+            self.node_data.model.completion_params = resolved_completion_params
+            model_config.parameters = resolved_completion_params
+
             # fetch memory
             memory = llm_utils.fetch_memory(
                 variable_pool=variable_pool,
@@ -756,6 +764,67 @@ class LLMNode(Node[LLMNodeData]):
         return None
 
     @staticmethod
+    def _resolve_model_parameters(
+        *,
+        completion_params: dict[str, Any],
+        variable_pool: VariablePool,
+    ) -> dict[str, Any]:
+        """
+        Parse variable references in completion_params.
+        For string type values, if they contain variable references ({{#...#}}),
+        replace them with actual values from variable_pool.
+        
+        Args:
+            completion_params: Model parameters dictionary
+            variable_pool: Variable pool to resolve variable references
+            
+        Returns:
+            Resolved model parameters dictionary
+        """
+        parsed_params: dict[str, Any] = {}
+        for key, value in completion_params.items():
+            if isinstance(value, str) and "{{#" in value and "#}}" in value:
+                # Contains variable reference, parse it
+                try:
+                    # Check if it's a pure variable reference (entire string is one variable)
+                    parser = VariableTemplateParser(value)
+                    variable_keys = parser.extract()
+                    # variable_keys[0] is like "#node_id.var#", so we need to wrap it with {{ }}
+                    if len(variable_keys) == 1 and value.strip() == f"{{{{{variable_keys[0]}}}}}":
+                        # Pure variable reference, get the actual variable value
+                        variable_selectors = parser.extract_variable_selectors()
+                        if variable_selectors:
+                            variable = variable_pool.get(variable_selectors[0].value_selector)
+                            if variable is not None:
+                                # Use the actual variable value, preserving its type
+                                parsed_value = variable.value
+                            else:
+                                # Variable not found, use text conversion
+                                segment_group = variable_pool.convert_template(value)
+                                parsed_value = segment_group.text
+                        else:
+                            segment_group = variable_pool.convert_template(value)
+                            parsed_value = segment_group.text
+                    else:
+                        # Mixed content (variable reference + other text), use text conversion
+                        segment_group = variable_pool.convert_template(value)
+                        parsed_value = segment_group.text
+                    parsed_params[key] = parsed_value
+                except Exception as e:
+                    # If parsing fails, keep original value
+                    logger.warning(
+                        "Failed to parse variable reference in completion param %s: %s, error: %s",
+                        key,
+                        value,
+                        str(e),
+                    )
+                    parsed_params[key] = value
+            else:
+                # No variable reference, use as is
+                parsed_params[key] = value
+        return parsed_params
+
+    @staticmethod
     def _fetch_model_config(
         *,
         node_data_model: ModelConfig,
@@ -1026,6 +1095,15 @@ class LLMNode(Node[LLMNodeData]):
 
         if typed_node_data.memory:
             variable_mapping["#sys.query#"] = ["sys", SystemVariableKey.QUERY]
+
+        # Extract variable references from completion_params
+        completion_params = typed_node_data.model.completion_params or {}
+        for param_key, param_value in completion_params.items():
+            if isinstance(param_value, str):
+                parser = VariableTemplateParser(template=param_value)
+                param_variable_selectors = parser.extract_variable_selectors()
+                for selector in param_variable_selectors:
+                    variable_mapping[selector.variable] = selector.value_selector
 
         if typed_node_data.prompt_config:
             enable_jinja = False

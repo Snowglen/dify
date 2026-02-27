@@ -3,6 +3,7 @@ import type {
   ModelParameterRule,
 } from '@/app/components/header/account-setting/model-provider-page/declarations'
 import type { ParameterValue } from '@/app/components/header/account-setting/model-provider-page/model-parameter-modal/parameter-item'
+import type { Node, NodeOutPutVar } from '@/app/components/workflow/types'
 import * as React from 'react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -19,6 +20,9 @@ type Props = {
   modelId: string
   completionParams: FormValue
   onCompletionParamsChange: (newParams: FormValue) => void
+  nodeId?: string
+  nodesOutputVars?: NodeOutPutVar[]
+  availableNodes?: Node[]
 }
 
 const LLMParamsPanel = ({
@@ -27,6 +31,9 @@ const LLMParamsPanel = ({
   modelId,
   completionParams,
   onCompletionParamsChange,
+  nodeId,
+  nodesOutputVars,
+  availableNodes,
 }: Props) => {
   const { t } = useTranslation()
   const { data: parameterRulesData, isPending: isLoading } = useModelParameterRules(provider, modelId)
@@ -74,7 +81,7 @@ const LLMParamsPanel = ({
   return (
     <>
       <div className="mb-2 flex items-center justify-between">
-        <div className={cn('system-sm-semibold flex h-6 items-center text-text-secondary')}>{t('modelProvider.parameters', { ns: 'common' })}</div>
+        <div className={cn('flex h-6 items-center text-text-secondary system-sm-semibold')}>{t('modelProvider.parameters', { ns: 'common' })}</div>
         {
           PROVIDER_WITH_PRESET_TONE.includes(provider) && (
             <PresetsParameter onSelect={handleSelectPresetParameter} />
@@ -93,6 +100,9 @@ const LLMParamsPanel = ({
             onChange={v => handleParamChange(parameter.name, v)}
             onSwitch={(checked, assignValue) => handleSwitch(parameter.name, checked, assignValue)}
             isInWorkflow
+            nodeId={nodeId}
+            nodesOutputVars={nodesOutputVars}
+            availableNodes={availableNodes}
           />
         )))}
     </>

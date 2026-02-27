@@ -31,6 +31,7 @@ from core.workflow.file import File
 from core.workflow.node_events import NodeRunResult
 from core.workflow.nodes.base import variable_template_parser
 from core.workflow.nodes.base.node import Node
+from core.workflow.nodes.base.variable_template_parser import VariableTemplateParser
 from core.workflow.nodes.llm import ModelConfig, llm_utils
 from core.workflow.runtime import VariablePool
 from factories.variable_factory import build_segment_with_type
@@ -132,6 +133,15 @@ class ParameterExtractorNode(Node[ParameterExtractorNodeData]):
         model_instance, model_config = self._fetch_model_config(node_data.model)
         if not isinstance(model_instance.model_type_instance, LargeLanguageModel):
             raise InvalidModelTypeError("Model is not a Large Language Model")
+
+        # resolve variable references in completion_params
+        from core.workflow.nodes.llm.node import LLMNode
+        resolved_completion_params = LLMNode._resolve_model_parameters(
+            completion_params=node_data.model.completion_params,
+            variable_pool=variable_pool,
+        )
+        node_data.model.completion_params = resolved_completion_params
+        model_config.parameters = resolved_completion_params
 
         llm_model = model_instance.model_type_instance
         model_schema = llm_model.get_model_schema(
@@ -828,6 +838,15 @@ class ParameterExtractorNode(Node[ParameterExtractorNodeData]):
             selectors = variable_template_parser.extract_selectors_from_template(typed_node_data.instruction)
             for selector in selectors:
                 variable_mapping[selector.variable] = selector.value_selector
+
+        # Extract variable references from completion_params
+        completion_params = typed_node_data.model.completion_params or {}
+        for param_key, param_value in completion_params.items():
+            if isinstance(param_value, str):
+                parser = VariableTemplateParser(template=param_value)
+                param_variable_selectors = parser.extract_variable_selectors()
+                for selector in param_variable_selectors:
+                    variable_mapping[selector.variable] = selector.value_selector
 
         variable_mapping = {node_id + "." + key: value for key, value in variable_mapping.items()}
 

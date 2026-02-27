@@ -22,7 +22,7 @@ from core.workflow.node_events import ModelInvokeCompletedEvent, NodeRunResult
 from core.workflow.nodes.base.entities import VariableSelector
 from core.workflow.nodes.base.node import Node
 from core.workflow.nodes.base.variable_template_parser import VariableTemplateParser
-from core.workflow.nodes.llm import LLMNode, LLMNodeChatModelMessage, LLMNodeCompletionModelPromptTemplate, llm_utils
+from core.workflow.nodes.llm import LLMNodeChatModelMessage, LLMNodeCompletionModelPromptTemplate, llm_utils
 from core.workflow.nodes.llm.file_saver import FileSaverImpl, LLMFileSaver
 from libs.json_in_md_parser import parse_and_check_json_markdown
 
@@ -92,6 +92,15 @@ class QuestionClassifierNode(Node[QuestionClassifierNodeData]):
             tenant_id=self.tenant_id,
             node_data_model=node_data.model,
         )
+
+        # resolve variable references in completion_params
+        from core.workflow.nodes.llm.node import LLMNode
+        resolved_completion_params = LLMNode._resolve_model_parameters(
+            completion_params=node_data.model.completion_params,
+            variable_pool=variable_pool,
+        )
+        node_data.model.completion_params = resolved_completion_params
+        model_config.parameters = resolved_completion_params
         # fetch memory
         memory = llm_utils.fetch_memory(
             variable_pool=variable_pool,
@@ -249,6 +258,15 @@ class QuestionClassifierNode(Node[QuestionClassifierNodeData]):
             variable_selectors.extend(variable_template_parser.extract_variable_selectors())
         for variable_selector in variable_selectors:
             variable_mapping[variable_selector.variable] = list(variable_selector.value_selector)
+
+        # Extract variable references from completion_params
+        completion_params = typed_node_data.model.completion_params or {}
+        for param_key, param_value in completion_params.items():
+            if isinstance(param_value, str):
+                parser = VariableTemplateParser(template=param_value)
+                param_variable_selectors = parser.extract_variable_selectors()
+                for selector in param_variable_selectors:
+                    variable_mapping[selector.variable] = selector.value_selector
 
         variable_mapping = {node_id + "." + key: value for key, value in variable_mapping.items()}
 

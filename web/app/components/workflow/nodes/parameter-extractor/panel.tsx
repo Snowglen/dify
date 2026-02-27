@@ -75,6 +75,9 @@ const Panel: FC<NodePanelProps<ParameterExtractorNodeType>> = ({
             hideDebugWithMultipleModel
             debugWithMultipleModel={false}
             readonly={readOnly}
+            nodeId={id}
+            nodesOutputVars={availableVars}
+            availableNodes={availableNodesWithParent}
           />
         </Field>
         <Field
@@ -179,9 +182,9 @@ const Panel: FC<NodePanelProps<ParameterExtractorNodeType>> = ({
           <div>
             <OutputVars>
               <>
-                {inputs.parameters.map((param, index) => (
+                {inputs.parameters.map(param => (
                   <VarItem
-                    key={index}
+                    key={param.name}
                     name={param.name}
                     type={param.type}
                     description={param.description}

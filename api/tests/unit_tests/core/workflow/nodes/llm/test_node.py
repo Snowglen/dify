@@ -725,3 +725,145 @@ class TestReasoningFormat:
 
         assert clean_text == text_with_think
         assert reasoning_content == ""
+
+
+class TestResolveModelParameters:
+    """Test cases for _resolve_model_parameters method."""
+
+    def test_resolve_model_parameters_with_simple_variable(self):
+        """Test _resolve_model_parameters with a simple variable reference."""
+        from core.variables.segments import FloatSegment, IntegerSegment
+
+        variable_pool = VariablePool(
+            system_variables=SystemVariable.default(),
+            user_inputs={},
+        )
+        variable_pool.add(["node1", "temperature"], FloatSegment(value=0.7))
+        variable_pool.add(["node1", "max_tokens"], IntegerSegment(value=100))
+
+        completion_params = {
+            "temperature": "{{#node1.temperature#}}",
+            "max_tokens": "{{#node1.max_tokens#}}",
+            "top_p": 0.9,
+        }
+
+        result = LLMNode._resolve_model_parameters(
+            completion_params=completion_params,
+            variable_pool=variable_pool,
+        )
+
+        assert result["temperature"] == 0.7
+        assert result["max_tokens"] == 100
+        assert result["top_p"] == 0.9
+
+    def test_resolve_model_parameters_with_mixed_content(self):
+        """Test _resolve_model_parameters with mixed content (variable + text)."""
+        from core.variables.segments import StringSegment
+
+        variable_pool = VariablePool(
+            system_variables=SystemVariable.default(),
+            user_inputs={},
+        )
+        variable_pool.add(["node1", "name"], StringSegment(value="test"))
+
+        completion_params = {
+            "user": "User: {{#node1.name#}}",
+            "temperature": 0.5,
+        }
+
+        result = LLMNode._resolve_model_parameters(
+            completion_params=completion_params,
+            variable_pool=variable_pool,
+        )
+
+        assert result["user"] == "User: test"
+        assert result["temperature"] == 0.5
+
+    def test_resolve_model_parameters_with_no_variables(self):
+        """Test _resolve_model_parameters with no variable references."""
+        variable_pool = VariablePool(
+            system_variables=SystemVariable.default(),
+            user_inputs={},
+        )
+
+        completion_params = {
+            "temperature": 0.7,
+            "max_tokens": 100,
+            "top_p": 0.9,
+        }
+
+        result = LLMNode._resolve_model_parameters(
+            completion_params=completion_params,
+            variable_pool=variable_pool,
+        )
+
+        assert result == completion_params
+
+
+class TestExtractVariableSelectorToVariableMapping:
+    """Test cases for _extract_variable_selector_to_variable_mapping method."""
+
+    def test_extract_variable_selector_to_variable_mapping_with_completion_params(self):
+        """Test _extract_variable_selector_to_variable_mapping with completion_params variables."""
+        node_id = "llm_node_1"
+        node_data = {
+            "title": "Test LLM",
+            "model": {
+                "provider": "openai",
+                "name": "gpt-3.5-turbo",
+                "mode": "chat",
+                "completion_params": {
+                    "temperature": "{{#node1.temp#}}",
+                    "max_tokens": "{{#node1.max#}}",
+                },
+            },
+            "prompt_template": [
+                {"role": "system", "text": "Hello {{#node1.name#}}", "edition_type": "basic"},
+            ],
+            "context": {"enabled": False},
+            "vision": VisionConfig(),
+        }
+
+        result = LLMNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id=node_id,
+            node_data=node_data,
+        )
+
+        assert f"{node_id}.#node1.temp#" in result
+        assert f"{node_id}.#node1.max#" in result
+        assert f"{node_id}.#node1.name#" in result
+        assert result[f"{node_id}.#node1.temp#"] == ["node1", "temp"]
+        assert result[f"{node_id}.#node1.max#"] == ["node1", "max"]
+        assert result[f"{node_id}.#node1.name#"] == ["node1", "name"]
+
+    def test_extract_variable_selector_to_variable_mapping_without_completion_params(self):
+        """Test _extract_variable_selector_to_variable_mapping without completion_params variables."""
+        node_id = "llm_node_1"
+        node_data = {
+            "title": "Test LLM",
+            "model": {
+                "provider": "openai",
+                "name": "gpt-3.5-turbo",
+                "mode": "chat",
+                "completion_params": {
+                    "temperature": 0.7,
+                    "max_tokens": 100,
+                },
+            },
+            "prompt_template": [
+                {"role": "system", "text": "Hello {{#node1.name#}}", "edition_type": "basic"},
+            ],
+            "context": {"enabled": False},
+            "vision": VisionConfig(),
+        }
+
+        result = LLMNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id=node_id,
+            node_data=node_data,
+        )
+
+        assert f"{node_id}.#node1.name#" in result
+        assert f"{node_id}.#node1.temp#" not in result
+        assert f"{node_id}.#node1.max#" not in result

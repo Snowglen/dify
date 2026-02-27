@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Generator, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
@@ -64,6 +65,8 @@ from .exc import (
 if TYPE_CHECKING:
     from core.agent.strategy.plugin import PluginAgentStrategy
     from core.plugin.entities.request import InvokeCredentials
+
+logger = logging.getLogger(__name__)
 
 
 class AgentNode(Node[AgentNodeData]):
@@ -315,7 +318,47 @@ class AgentNode(Node[AgentNodeData]):
                         )
                     value = tool_value
                 if parameter.type == AgentStrategyParameter.AgentStrategyParameterType.MODEL_SELECTOR:
+                    # Ensure value is a dict before accessing it
+                    if not isinstance(value, dict):
+                        # If value is a string (JSON parsing failed), try to parse it again
+                        if isinstance(value, str):
+                            try:
+                                # Try to parse as JSON
+                                value = json.loads(value)
+                            except (json.JSONDecodeError, TypeError) as e:
+                                # If JSON parsing fails, check if the original input was a dict
+                                # If so, the variable replacement might have broken the JSON structure
+                                # In this case, we should log a warning and try to use the original value
+                                if not isinstance(agent_input.value, str):
+                                    # Original was a dict, but variable replacement broke it
+                                    # Log warning and use original value (without variable replacement)
+                                    logger.warning(
+                                        "Failed to parse MODEL_SELECTOR parameter after variable replacement. "
+                                        "Using original value without variable replacement. Error: %s",
+                                        str(e),
+                                    )
+                                    value = agent_input.value
+                                else:
+                                    # Original was a string, so this is a real error
+                                    value_preview = value[:200] if len(value) > 200 else value
+                                    raise ValueError(
+                                        f"MODEL_SELECTOR parameter value must be a dict, "
+                                        f"got {type(value).__name__}: {value_preview}..."
+                                    )
+                        else:
+                            # Not a string and not a dict, this is an error
+                            raise ValueError(
+                                f"MODEL_SELECTOR parameter value must be a dict, got {type(value).__name__}: {value}"
+                            )
                     value = cast(dict[str, Any], value)
+                    # resolve variable references in completion_params
+                    if "completion_params" in value and isinstance(value["completion_params"], dict):
+                        from core.workflow.nodes.llm.node import LLMNode
+                        resolved_completion_params = LLMNode._resolve_model_parameters(
+                            completion_params=value["completion_params"],
+                            variable_pool=variable_pool,
+                        )
+                        value["completion_params"] = resolved_completion_params
                     model_instance, model_schema = self._fetch_model(value)
                     # memory config
                     history_prompt_messages = []
@@ -377,9 +420,22 @@ class AgentNode(Node[AgentNodeData]):
             input = typed_node_data.agent_parameters[parameter_name]
             match input.type:
                 case "mixed" | "constant":
-                    selectors = VariableTemplateParser(str(input.value)).extract_variable_selectors()
-                    for selector in selectors:
-                        result[selector.variable] = selector.value_selector
+                    # Handle string templates
+                    if isinstance(input.value, str):
+                        selectors = VariableTemplateParser(str(input.value)).extract_variable_selectors()
+                        for selector in selectors:
+                            result[selector.variable] = selector.value_selector
+                    # Handle dict values (e.g., model selector with completion_params)
+                    elif isinstance(input.value, dict):
+                        # Extract variable references from completion_params if present
+                        if "completion_params" in input.value and isinstance(input.value["completion_params"], dict):
+                            completion_params = input.value["completion_params"]
+                            for param_key, param_value in completion_params.items():
+                                if isinstance(param_value, str):
+                                    parser = VariableTemplateParser(template=param_value)
+                                    param_variable_selectors = parser.extract_variable_selectors()
+                                    for selector in param_variable_selectors:
+                                        result[selector.variable] = selector.value_selector
                 case "variable":
                     result[parameter_name] = input.value
 

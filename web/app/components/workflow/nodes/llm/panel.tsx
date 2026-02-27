@@ -1,7 +1,6 @@
 import type { FC } from 'react'
 import type { LLMNodeType } from './types'
 import type { NodePanelProps } from '@/app/components/workflow/types'
-import { RiAlertFill, RiQuestionLine } from '@remixicon/react'
 import * as React from 'react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -115,6 +114,9 @@ const Panel: FC<NodePanelProps<LLMNodeType>> = ({
             hideDebugWithMultipleModel
             debugWithMultipleModel={false}
             readonly={readOnly}
+            nodeId={id}
+            nodesOutputVars={availableVars}
+            availableNodes={availableNodesWithParent}
           />
         </Field>
 
@@ -264,23 +266,23 @@ const Panel: FC<NodePanelProps<LLMNodeType>> = ({
                 noDecoration
                 popupContent={(
                   <div className="w-[232px] rounded-xl border-[0.5px] border-components-panel-border bg-components-tooltip-bg px-4 py-3.5 shadow-lg backdrop-blur-[5px]">
-                    <div className="title-xs-semi-bold text-text-primary">{t('structOutput.modelNotSupported', { ns: 'app' })}</div>
-                    <div className="body-xs-regular mt-1 text-text-secondary">{t('structOutput.modelNotSupportedTip', { ns: 'app' })}</div>
+                    <div className="text-text-primary title-xs-semi-bold">{t('structOutput.modelNotSupported', { ns: 'app' })}</div>
+                    <div className="mt-1 text-text-secondary body-xs-regular">{t('structOutput.modelNotSupportedTip', { ns: 'app' })}</div>
                   </div>
                 )}
               >
                 <div>
-                  <RiAlertFill className="mr-1 size-4 text-text-warning-secondary" />
+                  <span className="i-ri-alert-fill mr-1 size-4 text-text-warning-secondary" />
                 </div>
               </Tooltip>
             )}
-            <div className="system-xs-medium-uppercase mr-0.5 text-text-tertiary">{t('structOutput.structured', { ns: 'app' })}</div>
+            <div className="mr-0.5 text-text-tertiary system-xs-medium-uppercase">{t('structOutput.structured', { ns: 'app' })}</div>
             <Tooltip popupContent={
               <div className="max-w-[150px]">{t('structOutput.structuredTip', { ns: 'app' })}</div>
             }
             >
               <div>
-                <RiQuestionLine className="size-3.5 text-text-quaternary" />
+                <span className="i-ri-question-line size-3.5 text-text-quaternary" />
               </div>
             </Tooltip>
             <Switch
