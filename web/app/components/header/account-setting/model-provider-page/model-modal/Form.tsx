@@ -161,7 +161,7 @@ function Form<
       const disabled = readonly || (isEditMode && (variable === '__model_type' || variable === '__model_name'))
       return (
         <div key={variable} className={cn(itemClassName, 'py-3')}>
-          <div className={cn(fieldLabelClassName, 'system-sm-semibold flex items-center py-2 text-text-secondary')}>
+          <div className={cn(fieldLabelClassName, 'flex items-center py-2 text-text-secondary system-sm-semibold')}>
             {label[language] || label.en_US}
             {required && (
               <span className="ml-1 text-red-500">*</span>
@@ -204,14 +204,24 @@ function Form<
 
       return (
         <div key={variable} className={cn(itemClassName, 'py-3')}>
-          <div className={cn(fieldLabelClassName, 'system-sm-semibold flex items-center py-2 text-text-secondary')}>
+          <div className={cn(fieldLabelClassName, 'flex items-center py-2 text-text-secondary system-sm-semibold')}>
             {label[language] || label.en_US}
             {required && (
               <span className="ml-1 text-red-500">*</span>
             )}
             {tooltipContent}
           </div>
-          <div className={cn('grid gap-3', `grid-cols-${options?.length}`)}>
+          <div
+            className={cn('grid gap-3', {
+              'grid-cols-1': options?.length === 1,
+              'grid-cols-2': options?.length === 2,
+              'grid-cols-3': options?.length === 3,
+              'grid-cols-4': options?.length === 4,
+              'grid-cols-5': options?.length === 5,
+              'grid-cols-6': options?.length === 6,
+            })}
+            style={options && options.length > 6 ? { gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` } : undefined}
+          >
             {options.filter((option) => {
               if (option.show_on.length)
                 return option.show_on.every(showOnItem => value[showOnItem.variable] === showOnItem.value)
@@ -229,7 +239,7 @@ function Form<
               >
                 <RadioE isChecked={value[variable] === option.value} />
 
-                <div className="system-sm-regular text-text-secondary">{option.label[language] || option.label.en_US}</div>
+                <div className="text-text-secondary system-sm-regular">{option.label[language] || option.label.en_US}</div>
               </div>
             ))}
           </div>
@@ -254,7 +264,7 @@ function Form<
 
       return (
         <div key={variable} className={cn(itemClassName, 'py-3')}>
-          <div className={cn(fieldLabelClassName, 'system-sm-semibold flex items-center py-2 text-text-secondary')}>
+          <div className={cn(fieldLabelClassName, 'flex items-center py-2 text-text-secondary system-sm-semibold')}>
             {label[language] || label.en_US}
 
             {required && (
@@ -295,9 +305,9 @@ function Form<
 
       return (
         <div key={variable} className={cn(itemClassName, 'py-3')}>
-          <div className="system-sm-semibold flex items-center justify-between py-2 text-text-secondary">
+          <div className="flex items-center justify-between py-2 text-text-secondary system-sm-semibold">
             <div className="flex items-center space-x-2">
-              <span className={cn(fieldLabelClassName, 'system-sm-semibold flex items-center py-2 text-text-secondary')}>{label[language] || label.en_US}</span>
+              <span className={cn(fieldLabelClassName, 'flex items-center py-2 text-text-secondary system-sm-semibold')}>{label[language] || label.en_US}</span>
               {required && (
                 <span className="ml-1 text-red-500">*</span>
               )}
@@ -326,7 +336,7 @@ function Form<
       } = formSchema as (CredentialFormSchemaTextInput | CredentialFormSchemaSecretInput)
       return (
         <div key={variable} className={cn(itemClassName, 'py-3')}>
-          <div className={cn(fieldLabelClassName, 'system-sm-semibold flex items-center py-2 text-text-secondary')}>
+          <div className={cn(fieldLabelClassName, 'flex items-center py-2 text-text-secondary system-sm-semibold')}>
             {label[language] || label.en_US}
             {required && (
               <span className="ml-1 text-red-500">*</span>
@@ -342,6 +352,9 @@ function Form<
             setModel={model => handleModelChanged(variable, model)}
             readonly={readonly}
             scope={scope}
+            nodeId={nodeId}
+            nodesOutputVars={nodeOutputVars}
+            availableNodes={availableNodes}
           />
           {fieldMoreInfo?.(formSchema)}
           {validating && changeKey === variable && <ValidatingTip />}
@@ -358,7 +371,7 @@ function Form<
       } = formSchema as (CredentialFormSchemaTextInput | CredentialFormSchemaSecretInput)
       return (
         <div key={variable} className={cn(itemClassName, 'py-3')}>
-          <div className={cn(fieldLabelClassName, 'system-sm-semibold flex items-center py-2 text-text-secondary')}>
+          <div className={cn(fieldLabelClassName, 'flex items-center py-2 text-text-secondary system-sm-semibold')}>
             {label[language] || label.en_US}
             {required && (
               <span className="ml-1 text-red-500">*</span>
@@ -422,7 +435,7 @@ function Form<
 
       return (
         <div key={variable} className={cn(itemClassName, 'py-3')}>
-          <div className={cn(fieldLabelClassName, 'system-sm-semibold flex items-center py-2 text-text-secondary')}>
+          <div className={cn(fieldLabelClassName, 'flex items-center py-2 text-text-secondary system-sm-semibold')}>
             {label[language] || label.en_US}
             {required && (
               <span className="ml-1 text-red-500">*</span>
@@ -451,7 +464,7 @@ function Form<
 
       return (
         <div key={variable} className={cn(itemClassName, 'py-3')}>
-          <div className={cn(fieldLabelClassName, 'system-sm-semibold flex items-center py-2 text-text-secondary')}>
+          <div className={cn(fieldLabelClassName, 'flex items-center py-2 text-text-secondary system-sm-semibold')}>
             {label[language] || label.en_US}
             {required && (
               <span className="ml-1 text-red-500">*</span>

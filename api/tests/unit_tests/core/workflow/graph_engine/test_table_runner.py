@@ -41,6 +41,7 @@ from core.workflow.graph_events import (
 )
 from core.workflow.runtime import GraphRuntimeState, VariablePool
 from core.workflow.system_variable import SystemVariable
+from tests.unit_tests.conftest import CACHED_APP
 
 from .test_mock_config import MockConfig
 from .test_mock_factory import MockNodeFactory
@@ -547,8 +548,13 @@ class TableTestRunner:
         """Run tests in parallel."""
         results = []
 
+        def run_test_case_with_app_context(test_case: WorkflowTestCase) -> WorkflowTestResult:
+            """Run a test case within Flask application context."""
+            with CACHED_APP.app_context():
+                return self.run_test_case(test_case)
+
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_test = {executor.submit(self.run_test_case, tc): tc for tc in test_cases}
+            future_to_test = {executor.submit(run_test_case_with_app_context, tc): tc for tc in test_cases}
 
             for future in as_completed(future_to_test):
                 test_case = future_to_test[future]

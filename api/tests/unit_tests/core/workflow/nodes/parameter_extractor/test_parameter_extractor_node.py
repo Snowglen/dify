@@ -565,3 +565,102 @@ class TestTransformResult:
         assert result == test_case.expected_result, (
             f"Failed for case: {test_case.name}. Expected: {test_case.expected_result}, Got: {result}"
         )
+
+
+class TestExtractVariableSelectorToVariableMapping:
+    """Test cases for _extract_variable_selector_to_variable_mapping method."""
+
+    def test_extract_variable_mapping_with_completion_params(self):
+        """Test extraction with completion_params containing variable references."""
+        node_id = "param_extractor_1"
+        node_data = {
+            "title": "Test Parameter Extractor",
+            "query": ["start", "query"],
+            "instruction": "Extract {{#node1.field#}}",
+            "model": {
+                "provider": "openai",
+                "name": "gpt-3.5-turbo",
+                "mode": "completion",
+                "completion_params": {
+                    "temperature": "{{#node1.temp#}}",
+                    "max_tokens": "{{#node1.max#}}",
+                },
+            },
+            "parameters": [],
+            "reasoning_mode": "function_call",
+            "vision": {},
+        }
+
+        result = ParameterExtractorNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id=node_id,
+            node_data=node_data,
+        )
+
+        assert f"{node_id}.query" in result
+        assert f"{node_id}.#node1.field#" in result
+        assert f"{node_id}.#node1.temp#" in result
+        assert f"{node_id}.#node1.max#" in result
+        assert result[f"{node_id}.query"] == ["start", "query"]
+        assert result[f"{node_id}.#node1.field#"] == ["node1", "field"]
+        assert result[f"{node_id}.#node1.temp#"] == ["node1", "temp"]
+        assert result[f"{node_id}.#node1.max#"] == ["node1", "max"]
+
+    def test_extract_variable_mapping_without_completion_params_variables(self):
+        """Test extraction without variable references in completion_params."""
+        node_id = "param_extractor_1"
+        node_data = {
+            "title": "Test Parameter Extractor",
+            "query": ["start", "query"],
+            "instruction": "Extract {{#node1.field#}}",
+            "model": {
+                "provider": "openai",
+                "name": "gpt-3.5-turbo",
+                "mode": "completion",
+                "completion_params": {
+                    "temperature": 0.7,
+                    "max_tokens": 100,
+                },
+            },
+            "parameters": [],
+            "reasoning_mode": "function_call",
+            "vision": {},
+        }
+
+        result = ParameterExtractorNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id=node_id,
+            node_data=node_data,
+        )
+
+        assert f"{node_id}.query" in result
+        assert f"{node_id}.#node1.field#" in result
+        assert f"{node_id}.#node1.temp#" not in result
+        assert f"{node_id}.#node1.max#" not in result
+
+    def test_extract_variable_mapping_with_empty_completion_params(self):
+        """Test extraction with empty completion_params."""
+        node_id = "param_extractor_1"
+        node_data = {
+            "title": "Test Parameter Extractor",
+            "query": ["start", "query"],
+            "instruction": "Extract data",
+            "model": {
+                "provider": "openai",
+                "name": "gpt-3.5-turbo",
+                "mode": "completion",
+                "completion_params": {},
+            },
+            "parameters": [],
+            "reasoning_mode": "function_call",
+            "vision": {},
+        }
+
+        result = ParameterExtractorNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id=node_id,
+            node_data=node_data,
+        )
+
+        assert f"{node_id}.query" in result
+        assert len(result) == 1

@@ -105,6 +105,14 @@ class QuestionClassifierNode(Node[QuestionClassifierNodeData]):
             model_instance.model_name,
             model_instance.credentials,
         )
+
+        # resolve variable references in completion_params
+        resolved_completion_params = LLMNode.resolve_model_parameters(
+            completion_params=node_data.model.completion_params,
+            variable_pool=variable_pool,
+        )
+        node_data.model.completion_params = resolved_completion_params
+        model_config.parameters = resolved_completion_params
         if not model_schema:
             raise ValueError(f"Model schema not found for {model_instance.model_name}")
         # fetch memory
@@ -266,6 +274,15 @@ class QuestionClassifierNode(Node[QuestionClassifierNodeData]):
             variable_selectors.extend(variable_template_parser.extract_variable_selectors())
         for variable_selector in variable_selectors:
             variable_mapping[variable_selector.variable] = list(variable_selector.value_selector)
+
+        # Extract variable references from completion_params
+        completion_params = typed_node_data.model.completion_params or {}
+        for _, param_value in completion_params.items():
+            if isinstance(param_value, str):
+                parser = VariableTemplateParser(template=param_value)
+                param_variable_selectors = parser.extract_variable_selectors()
+                for selector in param_variable_selectors:
+                    variable_mapping[selector.variable] = list(selector.value_selector)
 
         variable_mapping = {node_id + "." + key: value for key, value in variable_mapping.items()}
 

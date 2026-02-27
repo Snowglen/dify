@@ -8,6 +8,7 @@ import type {
   ModelFeatureEnum,
 } from '@/app/components/header/account-setting/model-provider-page/declarations'
 import type { TriggerProps } from '@/app/components/header/account-setting/model-provider-page/model-parameter-modal/trigger'
+import type { Node, NodeOutPutVar } from '@/app/components/workflow/types'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -40,6 +41,9 @@ export type ModelParameterModalProps = {
   isInWorkflow?: boolean
   isAgentStrategy?: boolean
   scope?: string
+  nodeId?: string
+  nodesOutputVars?: NodeOutPutVar[]
+  availableNodes?: Node[]
 }
 
 const ModelParameterModal: FC<ModelParameterModalProps> = ({
@@ -53,6 +57,9 @@ const ModelParameterModal: FC<ModelParameterModalProps> = ({
   isInWorkflow,
   isAgentStrategy,
   scope = ModelTypeEnum.textGeneration,
+  nodeId,
+  nodesOutputVars,
+  availableNodes,
 }) => {
   const { t } = useTranslation()
   const { isAPIKeySet } = useProviderContext()
@@ -245,7 +252,7 @@ const ModelParameterModal: FC<ModelParameterModalProps> = ({
           <div className={cn(popupClassName, 'w-[389px] rounded-2xl border-[0.5px] border-components-panel-border bg-components-panel-bg shadow-lg')}>
             <div className={cn('max-h-[420px] overflow-y-auto p-4 pt-3')}>
               <div className="relative">
-                <div className={cn('system-sm-semibold mb-1 flex h-6 items-center text-text-secondary')}>
+                <div className={cn('mb-1 flex h-6 items-center text-text-secondary system-sm-semibold')}>
                   {t('modelProvider.model', { ns: 'common' }).toLocaleUpperCase()}
                 </div>
                 <ModelSelector
@@ -265,6 +272,9 @@ const ModelParameterModal: FC<ModelParameterModalProps> = ({
                   completionParams={value?.completion_params || {}}
                   onCompletionParamsChange={handleLLMParamsChange}
                   isAdvancedMode={isAdvancedMode}
+                  nodeId={nodeId}
+                  nodesOutputVars={nodesOutputVars}
+                  availableNodes={availableNodes}
                 />
               )}
               {currentModel?.model_type === ModelTypeEnum.tts && (
