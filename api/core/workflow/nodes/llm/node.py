@@ -789,11 +789,11 @@ class LLMNode(Node[LLMNodeData]):
         Parse variable references in completion_params.
         For string type values, if they contain variable references ({{#...#}}),
         replace them with actual values from variable_pool.
-        
+
         Args:
             completion_params: Model parameters dictionary
             variable_pool: Variable pool to resolve variable references
-            
+
         Returns:
             Resolved model parameters dictionary
         """

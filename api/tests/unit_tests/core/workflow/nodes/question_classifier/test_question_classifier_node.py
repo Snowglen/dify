@@ -2,7 +2,6 @@
 Unit tests for QuestionClassifierNode._extract_variable_selector_to_variable_mapping method.
 """
 
-
 from core.workflow.nodes.question_classifier.question_classifier_node import QuestionClassifierNode
 
 

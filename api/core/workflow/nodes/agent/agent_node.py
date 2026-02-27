@@ -354,6 +354,7 @@ class AgentNode(Node[AgentNodeData]):
                     # resolve variable references in completion_params
                     if "completion_params" in value and isinstance(value["completion_params"], dict):
                         from core.workflow.nodes.llm.node import LLMNode
+
                         resolved_completion_params = LLMNode.resolve_model_parameters(
                             completion_params=value["completion_params"],
                             variable_pool=variable_pool,

@@ -2,7 +2,6 @@
 Unit tests for AgentNode._extract_variable_selector_to_variable_mapping method.
 """
 
-
 from core.workflow.nodes.agent.agent_node import AgentNode
 
 

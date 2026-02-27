@@ -162,6 +162,7 @@ class ParameterExtractorNode(Node[ParameterExtractorNodeData]):
 
         # resolve variable references in completion_params
         from core.workflow.nodes.llm.node import LLMNode
+
         resolved_completion_params = LLMNode.resolve_model_parameters(
             completion_params=node_data.model.completion_params,
             variable_pool=variable_pool,
