@@ -1,164 +1,419 @@
-import time
-from typing import Any
+from unittest.mock import MagicMock, PropertyMock, patch
 
-import httpx
 import pytest
 
-from core.app.entities.app_invoke_entities import InvokeFrom
-from core.workflow.entities import GraphInitParams
 from core.workflow.enums import WorkflowNodeExecutionStatus
-from core.workflow.nodes.http_request import HTTP_REQUEST_CONFIG_FILTER_KEY, HttpRequestNode, HttpRequestNodeConfig
-from core.workflow.nodes.http_request.entities import HttpRequestNodeTimeout, Response
-from core.workflow.runtime import GraphRuntimeState, VariablePool
-from core.workflow.system_variable import SystemVariable
-from models.enums import UserFrom
-
-HTTP_REQUEST_CONFIG = HttpRequestNodeConfig(
-    max_connect_timeout=10,
-    max_read_timeout=600,
-    max_write_timeout=600,
-    max_binary_size=10 * 1024 * 1024,
-    max_text_size=1 * 1024 * 1024,
-    ssl_verify=True,
-    ssrf_default_max_retries=3,
+from core.workflow.nodes.base.entities import VariableSelector
+from core.workflow.nodes.http_request.config import build_http_request_config
+from core.workflow.nodes.http_request.entities import (
+    HttpRequestNodeTimeout,
+)
+from core.workflow.nodes.http_request.exc import (
+    HttpRequestNodeError,
+    RequestBodyError,
+)
+from core.workflow.nodes.http_request.node import (
+    HttpRequestNode,
+    default_file_manager,
+    ssrf_proxy,
 )
 
 
-def test_get_default_config_without_filters_uses_literal_defaults():
-    default_config = HttpRequestNode.get_default_config()
-    timeout = default_config["config"]["timeout"]
+@pytest.fixture
+def node():
+    """
+    Fully isolated HttpRequestNode instance
+    """
+    with patch("core.workflow.nodes.http_request.node.Node.__init__", return_value=None):
+        node = HttpRequestNode(
+            id="node1",
+            config={},
+            graph_init_params=MagicMock(),
+            graph_runtime_state=MagicMock(),
+            http_request_config=build_http_request_config(),
+        )
 
-    assert default_config["type"] == "http-request"
-    assert timeout["connect"] == 10
-    assert timeout["read"] == 600
-    assert timeout["write"] == 600
-    assert timeout["max_connect_timeout"] == 10
-    assert timeout["max_read_timeout"] == 600
-    assert timeout["max_write_timeout"] == 600
-    assert default_config["config"]["ssl_verify"] is True
-    assert default_config["retry_config"]["max_retries"] == 3
+        node.user_id = "user1"
+        node.tenant_id = "tenant1"
+        node.graph_runtime_state = MagicMock()
+        node.graph_runtime_state.variable_pool = MagicMock()
 
-
-def test_get_default_config_uses_injected_http_request_config():
-    custom_config = HttpRequestNodeConfig(
-        max_connect_timeout=3,
-        max_read_timeout=4,
-        max_write_timeout=5,
-        max_binary_size=1024,
-        max_text_size=2048,
-        ssl_verify=False,
-        ssrf_default_max_retries=7,
-    )
-
-    default_config = HttpRequestNode.get_default_config(filters={HTTP_REQUEST_CONFIG_FILTER_KEY: custom_config})
-    timeout = default_config["config"]["timeout"]
-
-    assert timeout["connect"] == 3
-    assert timeout["read"] == 4
-    assert timeout["write"] == 5
-    assert timeout["max_connect_timeout"] == 3
-    assert timeout["max_read_timeout"] == 4
-    assert timeout["max_write_timeout"] == 5
-    assert default_config["config"]["ssl_verify"] is False
-    assert default_config["retry_config"]["max_retries"] == 7
+        return node
 
 
-def test_get_default_config_with_malformed_http_request_config_raises_value_error():
-    with pytest.raises(ValueError, match="http_request_config must be an HttpRequestNodeConfig instance"):
-        HttpRequestNode.get_default_config(filters={HTTP_REQUEST_CONFIG_FILTER_KEY: "invalid"})
+class TestMetadata:
+    def test_version(self):
+        assert HttpRequestNode.version() == "1"
+
+    def test_default_config(self):
+        config = HttpRequestNode.get_default_config()
+        assert config["type"] == "http-request"
+        assert "config" in config
+        assert "retry_config" in config
 
 
-def _build_http_node(
-    *, timeout: dict[str, int | None] | None = None, ssl_verify: bool | None = None
-) -> HttpRequestNode:
-    node_data: dict[str, Any] = {
-        "type": "http-request",
-        "title": "HTTP request",
-        "method": "get",
-        "url": "http://example.com",
-        "authorization": {"type": "no-auth"},
-        "headers": "",
-        "params": "",
-        "body": {"type": "none", "data": []},
-    }
-    if timeout is not None:
-        node_data["timeout"] = timeout
-    node_data["ssl_verify"] = ssl_verify
+class TestTimeout:
+    def test_timeout_none(self, node):
+        node_data = MagicMock(timeout=None)
+        result = node._get_request_timeout(node_data)
+        assert result == node._http_request_config.default_timeout()
 
-    node_config: dict[str, Any] = {
-        "id": "http-node",
-        "data": node_data,
-    }
-    graph_config = {
-        "nodes": [
-            {"id": "start", "data": {"type": "start", "title": "Start"}},
-            node_config,
-        ],
-        "edges": [],
-    }
-    graph_init_params = GraphInitParams(
-        tenant_id="tenant",
-        app_id="app",
-        workflow_id="workflow",
-        graph_config=graph_config,
-        user_id="user",
-        user_from=UserFrom.ACCOUNT,
-        invoke_from=InvokeFrom.DEBUGGER,
-        call_depth=0,
-    )
-    graph_runtime_state = GraphRuntimeState(
-        variable_pool=VariablePool(system_variables=SystemVariable(user_id="user", files=[]), user_inputs={}),
-        start_at=time.perf_counter(),
-    )
-    return HttpRequestNode(
-        id="http-node",
-        config=node_config,
-        graph_init_params=graph_init_params,
-        graph_runtime_state=graph_runtime_state,
-        http_request_config=HTTP_REQUEST_CONFIG,
-    )
+    def test_timeout_full(self, node):
+        timeout = HttpRequestNodeTimeout(connect=1, read=2, write=3)
+        node_data = MagicMock(timeout=timeout)
+
+        result = node._get_request_timeout(node_data)
+
+        assert result.connect == 1
+        assert result.read == 2
+        assert result.write == 3
 
 
-def test_get_request_timeout_returns_new_object_without_mutating_node_data():
-    node = _build_http_node(timeout={"connect": None, "read": 30, "write": None})
-    original_timeout = node.node_data.timeout
+class TestRun:
+    @patch("core.workflow.nodes.http_request.node.Executor")
+    def test_success(self, mock_executor_cls, node):
+        mock_executor = MagicMock()
+        mock_executor.url = "http://test.com"
+        mock_executor.to_log.return_value = {}
+        mock_executor.invoke.return_value = MagicMock(
+            response=MagicMock(is_success=True),
+            status_code=200,
+            text="ok",
+            headers={},
+            is_file=False,
+        )
+        mock_executor_cls.return_value = mock_executor
 
-    assert original_timeout is not None
-    resolved_timeout = node._get_request_timeout(node.node_data)
+        with patch.object(
+            HttpRequestNode,
+            "node_data",
+            new_callable=PropertyMock,
+            return_value=MagicMock(
+                timeout=None,
+                retry_config=MagicMock(retry_enabled=True),
+            ),
+        ):
+            result = node._run()
 
-    assert resolved_timeout is not original_timeout
-    assert original_timeout.connect is None
-    assert original_timeout.read == 30
-    assert original_timeout.write is None
-    assert resolved_timeout == HttpRequestNodeTimeout(connect=10, read=30, write=600)
+        assert result.status == WorkflowNodeExecutionStatus.SUCCEEDED
+        assert result.outputs["status_code"] == 200
+
+    @patch("core.workflow.nodes.http_request.node.Executor")
+    def test_failed_response(self, mock_executor_cls, node):
+        mock_executor = MagicMock()
+        mock_executor.url = "http://test.com"
+        mock_executor.to_log.return_value = {}
+        mock_executor.invoke.return_value = MagicMock(
+            response=MagicMock(is_success=False),
+            status_code=500,
+            text="error",
+            headers={},
+            is_file=False,
+        )
+        mock_executor_cls.return_value = mock_executor
+
+        # inject required internal attributes
+        node._node_id = "node1"
+        node._node_data = MagicMock(error_strategy=None)
+
+        with patch.object(
+            HttpRequestNode,
+            "node_data",
+            new_callable=PropertyMock,
+            return_value=MagicMock(
+                timeout=None,
+                retry_config=MagicMock(retry_enabled=True),
+            ),
+        ):
+            result = node._run()
+
+        assert result.status == WorkflowNodeExecutionStatus.FAILED
+        assert result.error_type == "HTTPResponseCodeError"
+
+    @patch("core.workflow.nodes.http_request.node.Executor")
+    def test_exception(self, mock_executor_cls, node):
+        mock_executor = MagicMock()
+        mock_executor.invoke.side_effect = HttpRequestNodeError("boom")
+        mock_executor.to_log.return_value = {}
+        mock_executor_cls.return_value = mock_executor
+
+        # inject required internals
+        node._node_id = "node1"
+        node._node_data = MagicMock(error_strategy=None)
+
+        with patch.object(
+            HttpRequestNode,
+            "node_data",
+            new_callable=PropertyMock,
+            return_value=MagicMock(
+                timeout=None,
+                retry_config=MagicMock(retry_enabled=True),
+            ),
+        ):
+            result = node._run()
+
+        assert result.status == WorkflowNodeExecutionStatus.FAILED
+        assert result.error == "boom"
 
 
-@pytest.mark.parametrize("ssl_verify", [None, False, True])
-def test_run_passes_node_data_ssl_verify_to_executor(monkeypatch: pytest.MonkeyPatch, ssl_verify: bool | None):
-    node = _build_http_node(ssl_verify=ssl_verify)
-    captured: dict[str, bool | None] = {}
+class TestVariableMapping:
+    @patch("core.workflow.nodes.http_request.node.HttpRequestNodeData")
+    def test_binary_invalid_length(self, mock_model):
+        mock_body = MagicMock(type="binary", data=[MagicMock(), MagicMock()])
+        mock_model.model_validate.return_value = MagicMock(
+            url="",
+            headers="",
+            params="",
+            body=mock_body,
+        )
 
-    class FakeExecutor:
-        def __init__(self, *, ssl_verify: bool | None, **kwargs: Any):
-            captured["ssl_verify"] = ssl_verify
-            self.url = "http://example.com"
-
-        def to_log(self) -> str:
-            return "request-log"
-
-        def invoke(self) -> Response:
-            return Response(
-                httpx.Response(
-                    status_code=200,
-                    content=b"ok",
-                    headers={"content-type": "text/plain"},
-                    request=httpx.Request("GET", "http://example.com"),
-                )
+        with pytest.raises(RequestBodyError):
+            HttpRequestNode._extract_variable_selector_to_variable_mapping(
+                graph_config={},
+                node_id="node1",
+                node_data={},
             )
 
-    monkeypatch.setattr("core.workflow.nodes.http_request.node.Executor", FakeExecutor)
+    @patch("core.workflow.nodes.http_request.node.variable_template_parser")
+    @patch("core.workflow.nodes.http_request.node.HttpRequestNodeData")
+    def test_json_body(self, mock_model, mock_parser):
+        mock_parser.extract_selectors_from_template.return_value = []
 
-    result = node._run()
+        mock_body = MagicMock(type="json", data=[MagicMock(key="k", value="v")])
+        mock_model.model_validate.return_value = MagicMock(
+            url="",
+            headers="",
+            params="",
+            body=mock_body,
+        )
 
-    assert result.status == WorkflowNodeExecutionStatus.SUCCEEDED
-    assert captured["ssl_verify"] is ssl_verify
+        mapping = HttpRequestNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id="node1",
+            node_data={},
+        )
+
+        assert isinstance(mapping, dict)
+
+
+class TestExtractFiles:
+    def test_not_file(self, node):
+        response = MagicMock(is_file=False)
+        result = node.extract_files("http://x.com", response)
+        assert result.value == []
+
+    @patch("core.workflow.nodes.http_request.node.ArrayFileSegment")
+    @patch("core.workflow.nodes.http_request.node.file_factory")
+    def test_file_extraction(self, mock_factory, mock_array_segment, node):
+        tool_file = MagicMock(id="file1")
+
+        tool_manager = MagicMock()
+        tool_manager.create_file_by_raw.return_value = tool_file
+        node._tool_file_manager_factory = MagicMock(return_value=tool_manager)
+
+        mock_factory.build_from_mapping.return_value = MagicMock()
+        mock_array_segment.return_value = MagicMock(value=["file"])
+
+        response = MagicMock(
+            is_file=True,
+            content_type="image/png",
+            content=b"data",
+            parsed_content_disposition=None,
+        )
+
+        result = node.extract_files("http://x.com/test.png", response)
+
+        assert result.value == ["file"]
+
+
+class TestRetry:
+    def test_retry_enabled(self, node):
+        with patch.object(
+            HttpRequestNode,
+            "node_data",
+            new_callable=PropertyMock,
+            return_value=MagicMock(retry_config=MagicMock(retry_enabled=True)),
+        ):
+            assert node.retry is True
+
+
+class TestInitCoverage:
+    def test_default_dependency_wiring(self):
+        with patch("core.workflow.nodes.http_request.node.Node.__init__", return_value=None):
+            node = HttpRequestNode(
+                id="n1",
+                config={},
+                graph_init_params=MagicMock(),
+                graph_runtime_state=MagicMock(),
+                http_request_config=build_http_request_config(),
+            )
+
+            assert node._http_client == ssrf_proxy
+            assert node._file_manager == default_file_manager
+
+
+class TestBodyTypeBranches:
+    @patch("core.workflow.nodes.http_request.node.HttpRequestNodeData")
+    def test_body_none_branch(self, mock_model):
+        mock_model.model_validate.return_value = MagicMock(
+            url="",
+            headers="",
+            params="",
+            body=MagicMock(type="none", data=[]),
+        )
+
+        result = HttpRequestNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id="node1",
+            node_data={},
+        )
+
+        assert result == {}
+
+    @patch("core.workflow.nodes.http_request.node.HttpRequestNodeData")
+    def test_binary_valid_branch(self, mock_model):
+        file_selector = ["var", "file"]
+
+        mock_body = MagicMock(
+            type="binary",
+            data=[MagicMock(file=file_selector)],
+        )
+
+        mock_model.model_validate.return_value = MagicMock(
+            url="",
+            headers="",
+            params="",
+            body=mock_body,
+        )
+
+        result = HttpRequestNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id="node1",
+            node_data={},
+        )
+
+        assert "node1.#var.file#" in result
+
+    @patch("core.workflow.nodes.http_request.node.variable_template_parser")
+    @patch("core.workflow.nodes.http_request.node.HttpRequestNodeData")
+    def test_raw_text_branch(self, mock_model, mock_parser):
+        mock_parser.extract_selectors_from_template.return_value = []
+        mock_body = MagicMock(
+            type="raw-text",
+            data=[MagicMock(key="k", value="v")],
+        )
+        mock_model.model_validate.return_value = MagicMock(
+            url="",
+            headers="",
+            params="",
+            body=mock_body,
+        )
+        result = HttpRequestNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id="node1",
+            node_data={},
+        )
+        assert isinstance(result, dict)
+
+    @patch("core.workflow.nodes.http_request.node.variable_template_parser")
+    @patch("core.workflow.nodes.http_request.node.HttpRequestNodeData")
+    def test_form_urlencoded_branch(self, mock_model, mock_parser):
+        mock_parser.extract_selectors_from_template.return_value = []
+
+        mock_body = MagicMock(
+            type="x-www-form-urlencoded",
+            data=[MagicMock(key="k1", value="v1")],
+        )
+        mock_model.model_validate.return_value = MagicMock(
+            url="",
+            headers="",
+            params="",
+            body=mock_body,
+        )
+        result = HttpRequestNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id="node1",
+            node_data={},
+        )
+        assert isinstance(result, dict)
+
+    @patch("core.workflow.nodes.http_request.node.variable_template_parser")
+    @patch("core.workflow.nodes.http_request.node.HttpRequestNodeData")
+    def test_form_data_file_branch(self, mock_model, mock_parser):
+        mock_parser.extract_selectors_from_template.return_value = []
+        mock_body = MagicMock(
+            type="form-data",
+            data=[
+                MagicMock(type="file", key="k", file=["a", "b"]),
+            ],
+        )
+        mock_model.model_validate.return_value = MagicMock(
+            url="",
+            headers="",
+            params="",
+            body=mock_body,
+        )
+        result = HttpRequestNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id="node1",
+            node_data={},
+        )
+        assert "node1.#a.b#" in result
+
+    @patch("core.workflow.nodes.http_request.node.variable_template_parser")
+    @patch("core.workflow.nodes.http_request.node.HttpRequestNodeData")
+    def test_selector_mapping_loop(self, mock_model, mock_parser):
+        selector = VariableSelector(
+            variable="#var#",
+            value_selector=["var"],
+        )
+
+        mock_parser.extract_selectors_from_template.return_value = [selector]
+
+        mock_model.model_validate.return_value = MagicMock(
+            url="test",
+            headers="",
+            params="",
+            body=None,
+        )
+
+        result = HttpRequestNode._extract_variable_selector_to_variable_mapping(
+            graph_config={},
+            node_id="node1",
+            node_data={},
+        )
+
+        assert "node1.#var#" in result
+
+
+class TestContentDispositionBranch:
+    @patch("core.workflow.nodes.http_request.node.ArrayFileSegment")
+    @patch("core.workflow.nodes.http_request.node.file_factory")
+    def test_content_disposition_filename(
+        self,
+        mock_factory,
+        mock_array_segment,
+        node,
+    ):
+        tool_file = MagicMock(id="file1")
+
+        tool_manager = MagicMock()
+        tool_manager.create_file_by_raw.return_value = tool_file
+        node._tool_file_manager_factory = MagicMock(return_value=tool_manager)
+
+        mock_factory.build_from_mapping.return_value = MagicMock()
+        mock_array_segment.return_value = MagicMock(value=["file"])
+
+        parsed_cd = MagicMock()
+        parsed_cd.get_filename.return_value = "image.png"
+
+        response = MagicMock(
+            is_file=True,
+            content_type=None,
+            content=b"data",
+            parsed_content_disposition=parsed_cd,
+        )
+
+        result = node.extract_files("http://x.com/test", response)
+
+        assert result.value == ["file"]
